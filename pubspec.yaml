@@ -1,0 +1,16 @@
+name: rp_backend_dart_frog
+description: Relying Party backend en Dart Frog para eSignet OIDC
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+
+dependencies:
+  crypto: ^3.0.3
+  dart_frog: ^1.1.0
+  dart_jsonwebtoken: ^3.1.1
+  http: ^1.2.0
+
+dev_dependencies:
+  test: ^1.25.0
+  mocktail: ^1.0.0
