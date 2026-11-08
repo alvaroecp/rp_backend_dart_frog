@@ -81,3 +81,42 @@ Examples:
   "session_expires_at": 1700001800
 }
 ```
+
+## Running
+
+Requirements:
+
+- [Dart SDK](https://dart.dev/get-dart) 3.13 or later and the Dart Frog CLI (`dart pub global activate dart_frog_cli`).
+- eSignet 2.0.0 running, with a client registered in it whose public key matches the private key (JWK) the BACKEND will use.
+- A `rp.env` file and the client's private key (JWK), both **outside the project**, so they never reach git.
+
+Configuration: the BACKEND reads `~/rp-app/rp.env`, or the file whose path is in the `RP_ENV` environment variable. Environment variables take precedence over the file. A minimal `rp.env`:
+
+```env
+CLIENT_ID=demo-rp-app
+REDIRECT_URI=http://localhost:3005/callback
+PRIVATE_JWK_PATH=/home/<user>/rp-app/client-private.jwk
+ISSUER=http://localhost:8080
+ALLOW_INSECURE_ISSUER=true
+```
+
+- `REDIRECT_URI` must be the one registered in eSignet. Its port is the one the BACKEND must listen on.
+- `ALLOW_INSECURE_ISSUER=true` is required with an `http` issuer, which is acceptable only locally. In production the issuer must be `https`.
+- If `PRIVATE_JWK_PATH` is not set, the BACKEND looks for `~/rp-app/client-private.jwk`.
+
+Start it from the project folder:
+
+```bash
+dart pub get
+dart_frog dev --port 3005
+```
+
+Use `--port 3005`: `dart_frog dev` listens on 8080 by default, which is eSignet's port. The port must match `REDIRECT_URI`, and only one process can use it.
+
+Check that it is up:
+
+```bash
+curl http://localhost:3005/health
+```
+
+It should answer `{"status":"ok","service":"rp-backend-dartfrog"}`.
