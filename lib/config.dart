@@ -8,6 +8,8 @@ class AppConfig {
   final bool allowInsecureIssuer;
   final String assertionAlg;
   final int port;
+  final String cookieName;
+  final String publicBaseUrl;
 
   AppConfig({
     required this.clientId,
@@ -17,6 +19,8 @@ class AppConfig {
     required this.allowInsecureIssuer,
     required this.assertionAlg,
     required this.port,
+    required this.cookieName,
+    required this.publicBaseUrl,
   });
 
   factory AppConfig.load() {
@@ -85,6 +89,8 @@ class AppConfig {
       allowInsecureIssuer: allowInsecure,
       assertionAlg: getVar('ASSERTION_ALG', 'PS256'),
       port: port,
+      cookieName: getVar('COOKIE_NAME', 'esignet_session_id'),
+      publicBaseUrl: getVar('PUBLIC_BASE_URL', 'http://localhost:3005'),
     );
   }
 }

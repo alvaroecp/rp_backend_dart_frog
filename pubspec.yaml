@@ -6,11 +6,13 @@ environment:
   sdk: '>=3.13.0 <4.0.0'
 
 dependencies:
-  crypto: ^3.0.3
+  crypto: ^3.0.8
   dart_frog: ^1.1.0
-  dart_jsonwebtoken: ^3.1.1
+  dart_jsonwebtoken: ^3.4.1
   http: ^1.2.0
+  uuid: ^4.6.0
 
 dev_dependencies:
+  dart_frog_lint: ^0.1.0
   test: ^1.25.0
   mocktail: ^1.0.0

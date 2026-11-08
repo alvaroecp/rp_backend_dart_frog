@@ -74,6 +74,7 @@ class InMemoryStores {
   final Map<String, LoginTicket> _tickets = {};
   final Map<String, TransactionData> _transactions = {};
   final Map<String, AppSession> _sessions = {};
+  final Map<String, Map<String, dynamic>> _tokensByTicket = {};
 
   final int maxPendingTickets;
   final int maxSessions;
@@ -126,6 +127,10 @@ class InMemoryStores {
     _transactions[cookieId] = data;
   }
 
+  TransactionData? getTransaction(String cookieId) {
+    return _transactions[cookieId];
+  }
+
   TransactionData? consumeTransaction(String cookieId) {
     return _transactions.remove(cookieId);
   }
@@ -147,5 +152,26 @@ class InMemoryStores {
 
   void removeSession(String appToken) {
     _sessions.remove(appToken);
+  }
+
+  /// Guarda el resultado del canje de tokens asociado a un ticket para el polling
+  void completeTicket(String ticketId, Map<String, dynamic> tokens) {
+    _tokensByTicket[ticketId] = tokens;
+    final ticket = _tickets[ticketId];
+    if (ticket != null) {
+      ticket.status = TicketStatus.complete;
+      ticket.completedAt = _clock();
+    }
+  }
+
+  /// Recupera los tokens para la app móvil durante el polling
+  Map<String, dynamic>? getTokensForTicket(String ticketId) {
+    return _tokensByTicket[ticketId];
+  }
+
+  /// Elimina el ticket y sus tokens asociados tras su entrega (Regla One-Shot)
+  void removeTicket(String ticketId) {
+    _tickets.remove(ticketId);
+    _tokensByTicket.remove(ticketId);
   }
 }

@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
-import 'dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+
 
 String _randomUrlSafe(int length, Random random) {
   final values = Uint8List(length);
