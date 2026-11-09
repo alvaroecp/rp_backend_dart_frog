@@ -26,7 +26,7 @@ How it works:
 - The USER authenticates directly with eSignet, through the BROWSER: neither the APP nor the BACKEND sees the USER's credentials.
 - All state (tickets, login transactions and sessions) lives in the BACKEND's memory: restarting it ends all sessions.
 
-**Status.** Learning project. In the tests it worked end to end with the APP on Windows, but the tests were limited and not exhaustive. Known limitations: it **does not verify the signatures** of the `id_token` or the `userinfo`, it has no automated tests of its own, and it adds no security headers or rate limiting. See "What is missing for production" below.
+**Status.** Developing project. In the tests it worked end to end with the APP on Windows, but the tests were limited and not exhaustive. See "What is missing for production" below.
 
 ## API
 
@@ -100,7 +100,7 @@ Steps, to be done once and in this order:
 
 1. **eSignet.** Install and start it as described in [esignet_local_docker](https://github.com/alvaroecp/esignet_local_docker#installation).
 2. **Key pair.** Create it with the commands of [Key pair of a client](https://github.com/alvaroecp/esignet_local_docker#key-pair-of-a-client). They write `client-public.jwk`, which goes into the registration, and `client-private.jwk`, which is the one this BACKEND uses. Keep the private one **outside this project**, for example in `~/rp-app/client-private.jwk`, so it never reaches git.
-3. **Client registration.** Follow [Client registration](https://github.com/alvaroecp/esignet_local_docker#client-registration), with two changes to its example: `redirectUris` has to be `["http://localhost:3005/callback"]`, and `clientId` is the one you will put in `CLIENT_ID` (`demo-rp-app` in the tests). `userClaims` should include at least `name`, `email` and `picture`.
+3. **Client registration.** Follow Client registration, with two changes to its example: redirectUris has to be ["http://localhost:3005/callback"], and clientId is the one you will put in CLIENT_ID (demo-rp-app in the tests). userClaims should include at least name, email and picture.
 4. **A test person.** Create one as in [User registration](https://github.com/alvaroecp/esignet_local_docker#user-registration), or use the demo person that the official eSignet guide mentions.
 5. **Configuration.** Create `rp.env` (see below).
 6. **Start the BACKEND** (see below).
@@ -152,14 +152,17 @@ The reasons below are the ones that guided the design. Some are inferences from 
 
 | Decision | Why | Cost or open point |
 | --- | --- | --- |
-| A BACKEND does the whole protocol; the APP does not talk to eSignet directly | eSignet announces only `private_key_jwt`, so the RP needs a private key to sign a client assertion, and a desktop application cannot reliably keep a key secret from whoever installs it. The key stays in the BACKEND; the APP only holds a session token | One more component to run, and the APP depends on it |
+| The RP is split into two parts: a BACKEND that does the whole protocol, and a desktop APP that does not talk to eSignet directly | eSignet's discovery document lists only `private_key_jwt` as a client authentication method, so the RP needs a private key to sign a client assertion, and a desktop application cannot reliably keep a key secret from whoever installs it. The key stays in the BACKEND; the APP only holds a session token | The BACKEND is an extra process to run, and the APP does not work without it |
+| A desktop APP (Flutter, Windows) as the front | It was chosen on purpose, to exercise scenarios that a purely web RP might not show. An Android APP was also in the plans, but it has not been developed yet | A web front was not tried and would apparently need CORS, which the BACKEND does not implement yet |
 | Authorization code flow with PKCE (`S256`), `state` and `nonce`, kept in the BACKEND and tied to a BROWSER cookie | eSignet announces `S256` as its only PKCE method. Keeping the verifier, `state` and `nonce` on the server means the APP does not hold what is needed to finish a login | The cookie is basic: `HttpOnly` and `SameSite=Lax`, without `Secure` or `Max-Age` |
 | The login happens in the system BROWSER, and eSignet redirects back to the BACKEND (`http://localhost:3005/callback`) | The USER types credentials only in eSignet's page, and a plain `http` return address avoids custom URL schemes in a desktop app | The BROWSER and the APP are not connected: the APP has to find out when the login ends |
-| A ticket and polling (`/api/login/start`, `/api/login/status`) | The `ticket` travels in the BROWSER's address and can only start a login. The `poll_secret`, needed to collect the result, stays with the APP by design. Polling was the simplest way to connect both without a push channel | Extra traffic. A result collected more than 300 s after the ticket was created returns `410`, even if the login completed in time (known bug) |
+| A ticket and a `poll_secret` to connect the BROWSER login with the APP | The `ticket` travels in the BROWSER's address and can only start a login. The `poll_secret`, needed to collect the result, stays with the APP by design | The result is delivered only once. A result collected more than 300 s after the ticket was created returns `410`, even if the login completed in time (known bug) |
+| The APP asks for the result by polling (`/api/login/status`), not through a link back to the APP | Polling was chosen because it seemed easier. A link (a custom URL scheme registered with the operating system) was the other option: the page shown after the callback would open the APP. A link would need a registration on Windows and a Flutter plugin | Extra traffic and a delay of up to one polling interval. A link or a push channel was not tried, and could replace or complement the polling later |
 | The BACKEND issues its own opaque `app_token` (1800 s) instead of passing eSignet's tokens to the APP | In the tests eSignet's tokens lasted about 120 s and no refresh token was seen, so they do not look suitable as a session. The BACKEND checks the claims once and keeps the profile | The session length is a demo choice, and there is no renewal |
 | State kept in memory | The simplest option for a demo: no database to install | One instance only; restarting ends every session |
-| The protocol is written by hand; a JWT library is used only for signatures | eSignet signs with PS256, and the standard Dart `jose` package lists no PS* algorithms. `dart_jsonwebtoken` supports PS256 and RSA keys in JWK format. An OpenID Connect library for Dart that supports `private_key_jwt` was not confirmed: the documentation of `openid_client` and `oidc_core` does not clearly mention it | More security-sensitive code to maintain, and not certified. Signature verification is still missing |
-| Dart Frog | It is a learning project, and it keeps the same language as the APP | Small ecosystem; its maintenance rhythm was not verified |
+| The protocol is written by hand, without an OpenID Connect library | An OpenID Connect library for Dart that supports `private_key_jwt`, the only client authentication method listed by eSignet's discovery document, was not confirmed: the documentation of `openid_client` and `oidc_core` does not clearly mention it. They were not tried | More security-sensitive code to maintain, and not certified. Signature verification is still missing |
+| A JWT library (`dart_jsonwebtoken`) is used only to sign the client assertion | eSignet signs with PS256, and the standard Dart `jose` package lists no PS* algorithms. `dart_jsonwebtoken` supports PS256 and RSA keys in JWK format | For now it is used only to sign: it is not yet used to verify tokens |
+| Dart Frog as the BACKEND framework | It lets the BACKEND be written in Dart, the same language as the APP, which looked like a solid bet | Dart Frog is probably small compared with the Java or Node ecosystems, so fewer ready-made libraries are available |
 | Configuration and keys outside the repository | So that secrets are less likely to be committed by accident | The default path assumes a `~/rp-app` folder |
 
 ## Private keys in production
@@ -172,8 +175,6 @@ In this demo the private key is a JWK file with permissions `600`, outside the r
 - **Loss.** In the tests, losing a private key left the client unusable, and no way to recover it was found; the way out was to register a new client. A production setup would need a recovery plan, or a confirmed way to update the key of a client.
 
 ## What is missing for production
-
-This list comes from reviewing the code and the tests, and it is probably not complete.
 
 | Area | Today | What would be needed |
 | --- | --- | --- |
