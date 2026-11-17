@@ -10,5 +10,5 @@ Handler middleware(Handler handler) {
   return handler
       .use(provider<AppConfig>((context) => _config))
       .use(provider<InMemoryStores>((context) => _stores))
-      .use(cors());
+      .use(cors(_config.allowedOrigin));
 }

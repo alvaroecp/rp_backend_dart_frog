@@ -1,15 +1,10 @@
-import 'dart:io';
-
 import 'package:dart_frog/dart_frog.dart';
 
 /// CORS for the web frontend. Only ONE origin is allowed (never `*`).
-/// The origin comes from the ALLOWED_ORIGIN variable, default http://localhost:4200.
-Middleware cors() {
-  final origin =
-      Platform.environment['ALLOWED_ORIGIN'] ?? 'http://localhost:4200';
-
+/// The origin comes from AppConfig.allowedOrigin (ALLOWED_ORIGIN).
+Middleware cors(String allowedOrigin) {
   final corsHeaders = <String, Object>{
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Poll-Secret',
     'Access-Control-Max-Age': '600',

@@ -10,6 +10,7 @@ class AppConfig {
   final int port;
   final String cookieName;
   final String publicBaseUrl;
+  final String allowedOrigin;
 
   AppConfig({
     required this.clientId,
@@ -21,6 +22,7 @@ class AppConfig {
     required this.port,
     required this.cookieName,
     required this.publicBaseUrl,
+    required this.allowedOrigin,
   });
 
   factory AppConfig.load() {
@@ -91,6 +93,7 @@ class AppConfig {
       port: port,
       cookieName: getVar('COOKIE_NAME', 'esignet_session_id'),
       publicBaseUrl: getVar('PUBLIC_BASE_URL', 'http://localhost:3005'),
+      allowedOrigin: getVar('ALLOWED_ORIGIN', 'http://localhost:4200'),
     );
   }
 }
