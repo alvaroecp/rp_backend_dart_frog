@@ -2,19 +2,20 @@
 
 ## Overview
 
-Backend of a *Relying Party* (RP) built with [Dart Frog](https://dart-frog.dev). It lets a Flutter desktop application (hereafter the **APP**) sign in with eSignet 2.0.0 (OpenID Connect).
+Backend of a *Relying Party* (RP) built with [Dart Frog](https://dart-frog.dev). It lets two Flutter applications, one for Windows desktop and one for the web (hereafter the **APP** for either of them), sign in with eSignet 2.0.0 (OpenID Connect).
 
-This RP is made of three repositories:
+This RP is made of four repositories:
 
 - [rp_backend_dart_frog](https://github.com/alvaroecp/rp_backend_dart_frog): this one, the BACKEND.
-- [rp_frontend_windows_flutter](https://github.com/alvaroecp/rp_frontend_windows_flutter): the APP.
+- [rp_frontend_windows_flutter](https://github.com/alvaroecp/rp_frontend_windows_flutter): the desktop APP.
+- [rp_frontend_web_flutter](https://github.com/alvaroecp/rp_frontend_web_flutter): the web APP.
 - [esignet_local_docker](https://github.com/alvaroecp/esignet_local_docker): how the local eSignet used for the tests was installed and operated, and how to create the key pair, register the client and create a test person.
 
 Actors:
 
-- **APP**: the Flutter desktop application. It is the one that uses this project's API.
+- **APP**: either Flutter application (desktop or web). It is the one that uses this project's API.
 - **BACKEND**: this project. It is the RP towards eSignet and the server towards the APP.
-- **BROWSER**: the system's web browser, where the USER authenticates with eSignet.
+- **BROWSER**: the web browser, where the USER authenticates with eSignet. With the web APP, it also runs the APP, and the login opens in a second tab.
 - **USER**: the person who signs in.
 - **eSignet**: the identity provider (OpenID Connect server).
 
@@ -22,11 +23,12 @@ How it works:
 
 - The BACKEND acts as a confidential client: it performs the whole protocol with eSignet (authorization code flow with PKCE and client authentication with `private_key_jwt`).
 - By design, the APP does not receive the private key or the eSignet tokens. It receives from the BACKEND its own opaque `app_token`, which is valid for 30 minutes and is not renewed.
+- The web APP runs in the BROWSER, which lets it read the BACKEND's responses only if the BACKEND allows its origin (CORS). The BACKEND allows one origin, `http://localhost:4200` by default (see `ALLOWED_ORIGIN`).
 - Sign-in works with a ticket: the APP asks the BACKEND for a ticket and opens the BROWSER. Meanwhile, it polls the BACKEND for the status until it receives the `app_token`.
 - The USER authenticates directly with eSignet, through the BROWSER: neither the APP nor the BACKEND sees the USER's credentials.
 - All state (tickets, login transactions and sessions) lives in the BACKEND's memory: restarting it ends all sessions.
 
-**Status.** Developing project. In the tests it worked end to end with the APP on Windows, but the tests were limited and not exhaustive. See "What is missing for production" below.
+**Status.** Developing project. In the tests it worked end to end with the desktop APP on Windows and the web APP in Chrome, but the tests were limited and not exhaustive. See "What is missing for production" below.
 
 ## API
 
@@ -41,6 +43,7 @@ Base URL of the BACKEND: `http://localhost:3005`. The responses of `/api/*` are 
 | `GET /api/me` | APP | `Authorization: Bearer <app_token>` | `200` with the profile | `401` |
 | `POST /api/logout` | APP | `Authorization: Bearer <app_token>` | `204` | — |
 | `GET /health` | Anyone | None | `200` | — |
+| `OPTIONS` (any path) | BROWSER (web APP) | None | `204` with the CORS headers | — |
 
 The APP only uses `start`, `status`, `me` and `logout`. `/app/login` and `/callback` are visited by the BROWSER: the APP just opens the `login_url` returned by `start`.
 
@@ -52,7 +55,8 @@ Rules:
 - The session is valid for 1800 s. When `me` responds `401`, the APP must ask the USER to sign in again.
 - `auth_time` and `session_expires_at` are in seconds since 1970.
 - In the tests, the `picture` field of the profile arrived as an inline image (`data:image/jpeg;base64,…`), not as a URL.
-- A method that is not allowed returns `405`.
+- A method that is not allowed returns `405`, except `OPTIONS`, which is answered with `204` (see above).
+- The responses carry CORS headers for a single origin (`ALLOWED_ORIGIN`, by default `http://localhost:4200`). A request that comes from another origin is still answered, but a BROWSER will not let its page read the response.
 
 Examples:
 
@@ -94,17 +98,17 @@ Requirements:
 
 - [Dart SDK](https://dart.dev/get-dart) 3.13 or later and the Dart Frog CLI (`dart pub global activate dart_frog_cli`).
 - A running eSignet 2.0.0, a client registered in it, and the matching private key (JWK). The steps below say how to get them.
-- To run the APP, Flutter: see the [APP's README](https://github.com/alvaroecp/rp_frontend_windows_flutter).
+- To run the APP, Flutter: see the README of the [desktop APP](https://github.com/alvaroecp/rp_frontend_windows_flutter) or of the [web APP](https://github.com/alvaroecp/rp_frontend_web_flutter).
 
 Steps, to be done once and in this order:
 
 1. **eSignet.** Install and start it as described in [esignet_local_docker](https://github.com/alvaroecp/esignet_local_docker#installation).
 2. **Key pair.** Create it with the commands of [Key pair of a client](https://github.com/alvaroecp/esignet_local_docker#key-pair-of-a-client). They write `client-public.jwk`, which goes into the registration, and `client-private.jwk`, which is the one this BACKEND uses. Keep the private one **outside this project**, for example in `~/rp-app/client-private.jwk`, so it never reaches git.
-3. **Client registration.** Follow Client registration, with two changes to its example: redirectUris has to be ["http://localhost:3005/callback"], and clientId is the one you will put in CLIENT_ID (demo-rp-app in the tests). userClaims should include at least name, email and picture.
+3. **Client registration.** Follow [Client registration](https://github.com/alvaroecp/esignet_local_docker#client-registration), with two changes to its example: `redirectUris` has to be `["http://localhost:3005/callback"]`, and `clientId` is the one you will put in `CLIENT_ID` (`demo-rp-app` in the tests). `userClaims` should include at least `name`, `email` and `picture`. The same registration serves both APPs: the return address is the BACKEND's, so the web APP does not need one of its own.
 4. **A test person.** Create one as in [User registration](https://github.com/alvaroecp/esignet_local_docker#user-registration), or use the demo person that the official eSignet guide mentions.
 5. **Configuration.** Create `rp.env` (see below).
 6. **Start the BACKEND** (see below).
-7. **Run the APP** and press its sign-in button. The BROWSER opens eSignet's page: sign in with the UIN of the test person. In the tests, the OTP `111111` worked. After that, the APP shows the profile.
+7. **Run an APP (desktop or web)** and press its sign-in button. The BROWSER opens eSignet's page (in a new tab, with the web APP): sign in with the UIN of the test person. In the tests, the OTP `111111` worked. After that, the APP shows the profile.
 
 Configuration: the BACKEND reads `~/rp-app/rp.env`, or the file whose path is in the `RP_ENV` environment variable. Environment variables take precedence over the file. The format is `NAME=value`, one per line; lines starting with `#` are comments. A minimal `rp.env`:
 
@@ -126,6 +130,7 @@ ALLOW_INSECURE_ISSUER=true
 | `ASSERTION_ALG` | `PS256` | Algorithm of the client assertion. `RS256` was also accepted by eSignet in the tests |
 | `COOKIE_NAME` | `esignet_session_id` | Name of the cookie of the login transaction |
 | `PUBLIC_BASE_URL` | `http://localhost:3005` | Base of the `login_url` returned to the APP |
+| `ALLOWED_ORIGIN` | `http://localhost:4200` | The one origin allowed by CORS: the address and port where the web APP runs. The desktop APP does not need it |
 
 The ticket lifetime (300 s), the session lifetime (1800 s), the polling interval (2 s) and the scope (`openid profile email`) are fixed in the code.
 
@@ -152,8 +157,9 @@ The reasons below are the ones that guided the design. Some are inferences from 
 
 | Decision | Why | Cost or open point |
 | --- | --- | --- |
-| The RP is split into two parts: a BACKEND that does the whole protocol, and a desktop APP that does not talk to eSignet directly | eSignet's discovery document lists only `private_key_jwt` as a client authentication method, so the RP needs a private key to sign a client assertion, and a desktop application cannot reliably keep a key secret from whoever installs it. The key stays in the BACKEND; the APP only holds a session token | The BACKEND is an extra process to run, and the APP does not work without it |
-| A desktop APP (Flutter, Windows) as the front | It was chosen on purpose, to exercise scenarios that a purely web RP might not show. An Android APP was also in the plans, but it has not been developed yet | A web front was not tried and would apparently need CORS, which the BACKEND does not implement yet |
+| The RP is split into two parts: a BACKEND that does the whole protocol, and an APP (desktop or web) that does not talk to eSignet directly | eSignet's discovery document lists only `private_key_jwt` as a client authentication method, so the RP needs a private key to sign a client assertion, and neither a desktop application nor a web application, whose code runs on the user's side, can reliably keep a key secret from whoever installs or opens it. The key stays in the BACKEND; the APP only holds a session token | The BACKEND is an extra process to run, and the APP does not work without it |
+| Two fronts: a desktop APP (Flutter, Windows) and a web APP (Flutter web) | The desktop APP was chosen first, on purpose, to exercise scenarios that a purely web RP might not show. The web APP was added later and uses the same BACKEND and the same flow. An Android APP was also in the plans, but it has not been developed yet | The web APP needs CORS in the BACKEND (next row), opens the login in a second tab, which a BROWSER might block as a pop-up, and keeps the `app_token` only in memory, so reloading the page ends the session. Only Chrome was tried |
+| CORS for a single origin (`ALLOWED_ORIGIN`), as a middleware | The web APP runs in the BROWSER at an origin different from the BACKEND's (another port), and a BROWSER only lets a page read responses from another origin if the server allows it. A single origin, and not `*`, so that no other web page can read the responses from a BROWSER | It does not protect the BACKEND: programs other than a BROWSER ignore CORS. Several web origins would need a list, which was not tried |
 | Authorization code flow with PKCE (`S256`), `state` and `nonce`, kept in the BACKEND and tied to a BROWSER cookie | eSignet announces `S256` as its only PKCE method. Keeping the verifier, `state` and `nonce` on the server means the APP does not hold what is needed to finish a login | The cookie is basic: `HttpOnly` and `SameSite=Lax`, without `Secure` or `Max-Age` |
 | The login happens in the system BROWSER, and eSignet redirects back to the BACKEND (`http://localhost:3005/callback`) | The USER types credentials only in eSignet's page, and a plain `http` return address avoids custom URL schemes in a desktop app | The BROWSER and the APP are not connected: the APP has to find out when the login ends |
 | A ticket and a `poll_secret` to connect the BROWSER login with the APP | The `ticket` travels in the BROWSER's address and can only start a login. The `poll_secret`, needed to collect the result, stays with the APP by design | The result is delivered only once. A result collected more than 300 s after the ticket was created returns `410`, even if the login completed in time (known bug) |
@@ -186,6 +192,7 @@ In this demo the private key is a JWK file with permissions `600`, outside the r
 | Transport and cookies | Plain `http`; cookie with `Path=/` and without `Secure` or `Max-Age`; no security headers | HTTPS everywhere, a stricter cookie, and headers such as `nosniff`, `no-store` and a content security policy |
 | Configuration and tests | Lifetimes and scope fixed in the code; a default path that assumes one specific home folder; only the template test; no CI | Configurable values, unit and integration tests against a simulated eSignet, and a pipeline |
 | Known bug | The `status` route checks the ticket's age before its state (see above) | Check the state first |
+| Web APP | One allowed origin, without a list. The `app_token` lives in the memory of the page, so reloading it ends the session. The login opens in a second tab, which a BROWSER may block as a pop-up. Only Chrome was tried | A list of allowed origins for each environment. For a web APP, a session in an `HttpOnly` cookie (or serving the APP from the BACKEND's origin), a sign-in in the same tab with a return address, and tests in other browsers |
 
 ## Problems found and how they were solved
 
